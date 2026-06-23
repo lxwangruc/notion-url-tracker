@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Notion URL Tracker — Read Later",
+  "version": "1.1.0",
+  "description": "One-click save the current page to a Notion read-later database: keeps the URL, extracts readable article text, supports tags, read/unread/archive status, multiple profiles, quick-saves, and selection capture.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Save to Notion read-later",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Ctrl+Shift+U" },
+      "description": "Open the Save to Notion popup"
+    },
+    "instant-save": {
+      "suggested_key": { "default": "Ctrl+Shift+S" },
+      "description": "Instantly save the current page to Notion (defaults)"
+    }
+  },
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab",
+    "tabs",
+    "contextMenus",
+    "notifications"
+  ],
+  "host_permissions": ["https://api.notion.com/*"]
+}

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Save to Notion</title>
+  </head>
+  <body>
+    <div id="app">
+      <!-- Top bar: profile + recent -->
+      <header id="topbar" class="hidden">
+        <select id="profile" title="Notion target"></select>
+        <button id="show-recent" class="link">Recent ▸</button>
+      </header>
+
+      <!-- Setup needed -->
+      <section id="needs-setup" class="view hidden">
+        <h1>Setup needed</h1>
+        <p class="muted">Connect Notion and choose a database before saving.</p>
+        <button id="open-options" class="primary">Open settings</button>
+      </section>
+
+      <!-- Loading -->
+      <section id="loading" class="view">
+        <div class="spinner"></div>
+        <p class="muted">Reading the page…</p>
+      </section>
+
+      <!-- Main form (new + edit) -->
+      <section id="form" class="view hidden">
+        <div id="dup-banner" class="banner hidden">
+          Already saved —
+          <a id="open-existing-inline" href="#">open existing</a>. Editing it
+          below.
+        </div>
+
+        <h1 id="form-title">Save to read-later</h1>
+
+        <label class="field">
+          <span>Title</span>
+          <input id="title" type="text" />
+        </label>
+
+        <div id="note-field" class="field hidden">
+          <span>Quote / note (from your selection)</span>
+          <textarea id="note" rows="3"></textarea>
+        </div>
+
+        <div class="field">
+          <span>Tags</span>
+          <div id="tag-chips" class="chips"></div>
+          <input
+            id="tag-input"
+            type="text"
+            list="tag-suggestions"
+            placeholder="Type a tag and press Enter"
+            autocomplete="off"
+          />
+          <datalist id="tag-suggestions"></datalist>
+        </div>
+
+        <label class="field">
+          <span>Status</span>
+          <select id="status"></select>
+        </label>
+
+        <div class="actions">
+          <button id="save" class="primary">Save</button>
+          <button id="cancel" class="link">Cancel</button>
+        </div>
+        <p id="save-state" class="muted small"></p>
+      </section>
+
+      <!-- Recent list -->
+      <section id="recent" class="view hidden">
+        <div class="recent-head">
+          <button id="recent-back" class="link">‹ Back</button>
+          <h1>Recent</h1>
+        </div>
+        <div id="recent-list"></div>
+        <p id="recent-empty" class="muted small hidden">No entries yet.</p>
+      </section>
+
+      <!-- Success -->
+      <section id="success" class="view hidden">
+        <h1 id="success-title">Saved ✓</h1>
+        <button id="open-saved" class="primary">Open in Notion</button>
+        <button id="close" class="link">Close</button>
+      </section>
+
+      <div id="error" class="error hidden"></div>
+    </div>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

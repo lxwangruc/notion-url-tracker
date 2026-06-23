@@ -1,0 +1,14 @@
+# Dependencies / build artifacts
+node_modules/
+dist/
+build/
+*.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# Logs
+*.log

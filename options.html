@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="options.css" />
+    <title>Notion URL Tracker — Settings</title>
+  </head>
+  <body>
+    <main>
+      <h1>Notion URL Tracker — Settings</h1>
+
+      <!-- Profiles -->
+      <section class="card">
+        <h2>Profiles</h2>
+        <p class="muted">
+          Each profile is a separate Notion target (e.g. Work and Personal). The
+          selected profile is the one used when saving; you can switch it from the
+          popup too.
+        </p>
+        <div class="row">
+          <select id="profile-select"></select>
+          <button id="add-profile" class="ghost">+ Add</button>
+          <button id="delete-profile" class="ghost">Delete</button>
+        </div>
+        <label class="field">
+          <span>Profile name</span>
+          <input id="profile-name" type="text" placeholder="e.g. Personal" />
+        </label>
+      </section>
+
+      <!-- Step 1: token -->
+      <section class="card">
+        <h2>1. Connect Notion</h2>
+        <p class="muted">
+          Create an internal integration at
+          <a href="https://www.notion.so/my-integrations" target="_blank"
+            >notion.so/my-integrations</a
+          >, copy its <strong>Internal Integration Secret</strong>, then share a
+          parent page with that integration (page → ••• → Connections).
+        </p>
+        <label class="field">
+          <span>Integration token</span>
+          <input id="token" type="password" placeholder="ntn_… or secret_…" />
+        </label>
+        <div class="row">
+          <button id="save-token" class="primary">Save &amp; connect</button>
+          <span id="token-status" class="status"></span>
+        </div>
+      </section>
+
+      <!-- Step 2: database -->
+      <section class="card">
+        <h2>2. Choose database</h2>
+        <p class="muted">
+          Pick a parent page shared with the integration, then create the
+          read-later database inside it.
+        </p>
+        <div class="row">
+          <select id="parent-page">
+            <option value="">— select a parent page —</option>
+          </select>
+          <button id="refresh-pages" class="ghost" title="Reload pages">⟳</button>
+        </div>
+        <div class="row">
+          <button id="create-db" class="primary">Create database</button>
+          <span id="db-status" class="status"></span>
+        </div>
+        <details>
+          <summary>Use an existing database instead</summary>
+          <label class="field">
+            <span>Database ID</span>
+            <input id="db-id" type="text" placeholder="32-character database id" />
+          </label>
+          <button id="save-db-id" class="ghost">Save database ID</button>
+        </details>
+        <p id="current-db" class="muted small"></p>
+      </section>
+
+      <!-- Step 3: tags -->
+      <section class="card">
+        <h2>3. Predefined tags</h2>
+        <p class="muted">
+          One per line (or comma-separated). Shown as suggestions when saving; you
+          can still add new tags on the fly.
+        </p>
+        <textarea id="tags" rows="5" placeholder="news&#10;dev&#10;recipes"></textarea>
+        <div class="row">
+          <button id="save-tags" class="primary">Save tags</button>
+          <span id="tags-status" class="status"></span>
+        </div>
+      </section>
+
+      <!-- Global settings -->
+      <section class="card">
+        <h2>Settings</h2>
+        <label class="field">
+          <span>How to store page content</span>
+          <select id="body-format">
+            <option value="paragraphs">Readable article text (paragraphs)</option>
+            <option value="quote">Readable article text (as quotes)</option>
+            <option value="bookmark">Bookmark preview only (no text)</option>
+          </select>
+        </label>
+        <label class="checkbox">
+          <input id="saved-indicator" type="checkbox" />
+          <span>
+            Show a dot on the toolbar icon when the current page is already saved
+            <small class="muted"> (makes a Notion request per page load)</small>
+          </span>
+        </label>
+        <div class="row">
+          <button id="save-settings" class="primary">Save settings</button>
+          <span id="settings-status" class="status"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Keyboard shortcuts</h2>
+        <p class="muted">
+          <kbd>Ctrl/⌘+Shift+U</kbd> opens the save popup.
+          <kbd>Ctrl/⌘+Shift+S</kbd> instantly saves the current page with
+          defaults. Change them at
+          <code>edge://extensions/shortcuts</code>.
+        </p>
+      </section>
+
+      <div id="error" class="error hidden"></div>
+    </main>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
