@@ -89,17 +89,28 @@ writes the ones that exist, so it works with the **Link Tracker template** as-is
 
 **Required:** a `title` property, a `URL` (url) property, and a `Status`
 property (either a *Status*-type or a *Select*; its options are read from the
-database). **Used if present:** `Tags` (multi-select), `Favourite`/`Archive`
-(checkbox), `Type` (select), `Site`/`Author` (text), `Published`/`Saved` (date),
-and `Category` (relation — see below).
+database). **Used if present:** `Tags` (see below), `Type` (select),
+`Site`/`Author` (text), `Published`/`Saved` (date). `Favourite`/`Archive`
+checkboxes are still supported by the client but are no longer shown in the
+popup.
 
-### Categories
+### Tags (multi-select **or** relation)
 
-If your database has a `Category` **relation** property (as the Link Tracker
-template does), the save popup shows a **Category** picker. You can attach one or
-several existing categories to a link, or type a new name + Enter to create the
-category row on the fly. The related Categories database's `Total Links` rollup
-updates automatically. Leave it empty to skip.
+The popup always shows a single **Tags** picker, backed by whichever exists:
+
+- **Relation** — if your Links database has a relation property named `Tags`
+  (or `Category`), each tag is a reusable **row in the linked database**.
+  Picking a tag links its row; typing a new name creates the row, then links it.
+  This is the recommended setup with the Link Tracker template (rename its
+  `Category` relation/database to `Tags`).
+- **Multi-select** — otherwise the extension uses a `Tags` multi-select property
+  (auto-added to its own database), storing tags as plain labels.
+
+### Type ("Links By Type")
+
+If a `Type` select property exists (as in the template), the popup shows a
+**Type** dropdown (Video/Post/Article/…), defaulting to blank. Setting it files
+the link into the template's grouped "Links By Type" view.
 
 The extension's own auto-created database uses these properties:
 
@@ -110,8 +121,6 @@ The extension's own auto-created database uses these properties:
 | Status           | Select       | `Inbox` (default)/`To review`/`Reviewed` |
 | Type             | Select       | Video/Article/Podcast/…            |
 | Tags             | Multi-select | Your tags                          |
-| Favourite        | Checkbox     |                                    |
-| Archive          | Checkbox     |                                    |
 | Site             | Text         | Source site name                   |
 | Saved            | Date         | When you saved it                  |
 

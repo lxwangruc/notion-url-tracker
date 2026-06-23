@@ -97,10 +97,7 @@ async function savePage(tab, selectionText = "") {
       {
         title: article.title,
         url: tab.url,
-        tags: [],
         status: defaultStatus,
-        favourite: false,
-        archive: false,
         site: article.siteName,
         author: article.byline,
         publishedTime: article.publishedTime,
@@ -138,10 +135,7 @@ async function saveLink(linkUrl, selectionText, tabId) {
       {
         title: selectionText || linkUrl,
         url: linkUrl,
-        tags: [],
         status: defaultStatus,
-        favourite: false,
-        archive: false,
         site: hostOf(linkUrl),
         paragraphs: [],
         bodyFormat: "bookmark", // link only: store a preview, no article text

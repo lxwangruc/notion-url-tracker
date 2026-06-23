@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Notion URL Tracker — Read Later",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "One-click save the current page to a Notion read-later database (works with the Link Tracker template): keeps the URL, extracts readable article text, supports tags, status, favourite/archive, multiple profiles, quick-saves, and selection capture.",
   "icons": {
     "16": "icons/icon16.png",

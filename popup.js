@@ -13,8 +13,8 @@ import {
   createEntry,
   updateEntry,
   appendBlocks,
-  loadCategories,
-  createCategory,
+  loadTagRows,
+  createTagRow,
 } from "./notion.js";
 import { extractArticle } from "./extract.js";
 
@@ -34,170 +34,193 @@ function showError(msg) {
   el.classList.toggle("hidden", !msg);
 }
 
-// ---- Tags -------------------------------------------------------------------
+// ---- Tags (unified: relation rows OR multi-select) --------------------------
+//
+// In "relation" mode each tag is a row in a linked database; the chip's value is
+// the row id and a new name creates a row. In "multi_select" mode the value is
+// just the tag name.
 
-const selectedTags = new Set();
+const tagSel = new Map(); // value -> label
+let tagByLabel = new Map(); // lowercased label -> { value, label }
+let tagByValue = new Map(); // value -> label
 
-function renderChips() {
+function renderTagChips() {
   const wrap = document.getElementById("tag-chips");
   wrap.innerHTML = "";
-  for (const tag of selectedTags) {
+  for (const [value, label] of tagSel) {
     const chip = document.createElement("span");
     chip.className = "chip";
-    chip.textContent = tag;
+    chip.textContent = label;
     const x = document.createElement("button");
     x.type = "button";
     x.className = "chip-x";
     x.textContent = "×";
     x.onclick = () => {
-      selectedTags.delete(tag);
-      renderChips();
+      tagSel.delete(value);
+      renderTagChips();
     };
     chip.appendChild(x);
     wrap.appendChild(chip);
   }
 }
-function addTag(raw) {
-  const t = (raw || "").trim();
-  if (t) selectedTags.add(t);
-  renderChips();
+
+function addTagItem(value, label) {
+  if (value === null || value === undefined) return;
+  tagSel.set(value, label || tagByValue.get(value) || value);
+  renderTagChips();
 }
-function setupTagInput(suggestions) {
+
+function indexTags(options, extraLabels) {
+  tagByLabel = new Map();
+  tagByValue = new Map();
+  for (const o of options) {
+    tagByLabel.set(o.label.toLowerCase(), o);
+    tagByValue.set(o.value, o.label);
+  }
   const datalist = document.getElementById("tag-suggestions");
   datalist.innerHTML = "";
-  for (const s of suggestions) {
+  const labels = new Set([
+    ...options.map((o) => o.label),
+    ...(extraLabels || []),
+  ]);
+  for (const l of [...labels].sort((a, b) => a.localeCompare(b))) {
     const opt = document.createElement("option");
-    opt.value = s;
+    opt.value = l;
     datalist.appendChild(opt);
   }
+}
+
+function setupTagControl() {
   const input = document.getElementById("tag-input");
-  input.onkeydown = (e) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      addTag(input.value);
-      input.value = "";
-    }
-  };
-  input.oninput = () => {
-    if (suggestions.includes(input.value)) {
-      addTag(input.value);
-      input.value = "";
-    }
-  };
-}
-
-// ---- Categories (relation to the Categories database) -----------------------
-
-const selectedCategories = new Map(); // id -> name
-let categoryByName = new Map(); // lowercased name -> { id, name }
-let categoryById = new Map(); // id -> name
-
-function renderCategoryChips() {
-  const wrap = document.getElementById("category-chips");
-  wrap.innerHTML = "";
-  for (const [id, name] of selectedCategories) {
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    chip.textContent = name;
-    const x = document.createElement("button");
-    x.type = "button";
-    x.className = "chip-x";
-    x.textContent = "×";
-    x.onclick = () => {
-      selectedCategories.delete(id);
-      renderCategoryChips();
-    };
-    chip.appendChild(x);
-    wrap.appendChild(chip);
-  }
-}
-
-function addCategory(id, name) {
-  if (id) selectedCategories.set(id, name || categoryById.get(id) || id);
-  renderCategoryChips();
-}
-
-function indexCategories(options) {
-  categoryByName = new Map();
-  categoryById = new Map();
-  for (const o of options) {
-    categoryByName.set(o.name.toLowerCase(), o);
-    categoryById.set(o.id, o.name);
-  }
-  const datalist = document.getElementById("category-suggestions");
-  datalist.innerHTML = "";
-  for (const o of options) {
-    const opt = document.createElement("option");
-    opt.value = o.name;
-    datalist.appendChild(opt);
-  }
-}
-
-function setupCategoryInput() {
-  const input = document.getElementById("category-input");
-  const stateEl = document.getElementById("category-state");
+  const stateEl = document.getElementById("tag-state");
 
   async function commit() {
     const raw = input.value.trim();
     if (!raw) return;
-    const hit = categoryByName.get(raw.toLowerCase());
+    const hit = tagByLabel.get(raw.toLowerCase());
     if (hit) {
-      addCategory(hit.id, hit.name);
+      addTagItem(hit.value, hit.label);
       input.value = "";
       return;
     }
-    // Create a new category row on the fly.
-    input.disabled = true;
-    stateEl.textContent = `Creating “${raw}”…`;
-    try {
-      const { token } = state.profile;
-      const created = await createCategory(
-        token,
-        state.schema.categoryDbId,
-        state.categoryTitleName,
-        raw
-      );
-      indexCategories([...categoryById.entries()]
-        .map(([id, name]) => ({ id, name }))
-        .concat([{ id: created.id, name: created.name }])
-        .sort((a, b) => a.name.localeCompare(b.name)));
-      addCategory(created.id, created.name);
+    if (state.tagsMode === "relation") {
+      input.disabled = true;
+      stateEl.textContent = `Creating “${raw}”…`;
+      try {
+        const created = await createTagRow(
+          state.profile.token,
+          state.schema.tagRelDbId,
+          state.tagTitleName,
+          raw
+        );
+        const merged = [...tagByValue.entries()]
+          .map(([value, label]) => ({ value, label }))
+          .concat([{ value: created.id, label: created.name }])
+          .sort((a, b) => a.label.localeCompare(b.label));
+        indexTags(merged, state.profile.predefinedTags);
+        addTagItem(created.id, created.name);
+        input.value = "";
+        stateEl.textContent = "";
+      } catch (e) {
+        stateEl.textContent = e.message || "Could not create tag.";
+      } finally {
+        input.disabled = false;
+        input.focus();
+      }
+    } else {
+      // multi-select: the value is the tag name itself
+      addTagItem(raw, raw);
       input.value = "";
-      stateEl.textContent = "";
-    } catch (e) {
-      stateEl.textContent = e.message || "Could not create category.";
-    } finally {
-      input.disabled = false;
-      input.focus();
     }
   }
 
   input.onkeydown = (e) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       commit();
     }
   };
   input.oninput = () => {
-    if (categoryByName.has(input.value.trim().toLowerCase())) {
-      const hit = categoryByName.get(input.value.trim().toLowerCase());
-      addCategory(hit.id, hit.name);
+    const hit = tagByLabel.get(input.value.trim().toLowerCase());
+    if (hit) {
+      addTagItem(hit.value, hit.label);
       input.value = "";
     }
   };
 }
 
-function showCategoryField(preselectIds) {
-  const has = state.schema && state.schema.categoryName;
-  document.getElementById("category-field").classList.toggle("hidden", !has);
-  if (!has) return;
-  indexCategories(state.categoryOptions || []);
-  setupCategoryInput();
-  selectedCategories.clear();
-  for (const id of preselectIds || [])
-    addCategory(id, categoryById.get(id) || id);
-  renderCategoryChips();
+function setupTags(preselect) {
+  const s = state.schema;
+  if (s && s.tagRelName) state.tagsMode = "relation";
+  else if (s && s.tagsName) state.tagsMode = "multi_select";
+  else state.tagsMode = null;
+
+  const field = document.getElementById("tag-field");
+  field.classList.toggle("hidden", !state.tagsMode);
+  tagSel.clear();
+  if (!state.tagsMode) {
+    renderTagChips();
+    return;
+  }
+
+  let options;
+  if (state.tagsMode === "relation") {
+    options = (state.tagOptions || []).map((o) => ({
+      value: o.id,
+      label: o.name,
+    }));
+    indexTags(options, state.profile.predefinedTags);
+  } else {
+    const names = Array.from(
+      new Set([
+        ...(state.profile.predefinedTags || []),
+        ...((s && s.tagOptions) || []),
+      ])
+    );
+    options = names.map((n) => ({ value: n, label: n }));
+    indexTags(options, []);
+  }
+  setupTagControl();
+
+  for (const item of preselect || []) {
+    if (state.tagsMode === "relation")
+      addTagItem(item, tagByValue.get(item) || item);
+    else addTagItem(item, item);
+  }
+  renderTagChips();
 }
+
+function selectedTagData() {
+  if (state.tagsMode === "relation")
+    return { tagRefs: Array.from(tagSel.keys()) };
+  if (state.tagsMode === "multi_select")
+    return { tags: Array.from(tagSel.keys()) };
+  return {};
+}
+
+// ---- Type -------------------------------------------------------------------
+
+function setupTypeField(selected) {
+  const s = state.schema;
+  const has = s && s.typeName && s.typeOptions.length;
+  document.getElementById("type-field").classList.toggle("hidden", !has);
+  if (!has) return;
+  const sel = document.getElementById("type");
+  sel.innerHTML = "";
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = "—";
+  sel.appendChild(blank);
+  for (const t of s.typeOptions) {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    if (t === selected) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+// ---- Status -----------------------------------------------------------------
 
 function statusList() {
   const opts =
@@ -209,24 +232,13 @@ function statusList() {
 function fillStatusOptions(selected) {
   const sel = document.getElementById("status");
   sel.innerHTML = "";
-  const opts = statusList();
-  for (const s of opts) {
+  for (const s of statusList()) {
     const opt = document.createElement("option");
     opt.value = s;
     opt.textContent = s;
     if (s === selected) opt.selected = true;
     sel.appendChild(opt);
   }
-}
-
-function showFlags() {
-  const fav = state.schema && state.schema.favouriteName;
-  const arch = state.schema && state.schema.archiveName;
-  document.getElementById("fav-wrap").classList.toggle("hidden", !fav);
-  document.getElementById("arch-wrap").classList.toggle("hidden", !arch);
-  document
-    .getElementById("flags")
-    .classList.toggle("hidden", !fav && !arch);
 }
 
 // ---- State ------------------------------------------------------------------
@@ -237,8 +249,9 @@ const state = {
   settings: null,
   schema: null,
   article: null,
-  categoryOptions: [],
-  categoryTitleName: "Name",
+  tagsMode: null,
+  tagOptions: [],
+  tagTitleName: "Name",
   mode: "new",
   editingId: null,
   editingPageUrl: null,
@@ -258,7 +271,6 @@ async function buildProfileSelect() {
   sel.style.display = store.profiles.length > 1 ? "" : "none";
   sel.onchange = async () => {
     await setActiveProfile(sel.value);
-    selectedTags.clear();
     state.schema = null;
     main();
   };
@@ -295,11 +307,11 @@ async function main() {
   }
   state.schema = schema;
 
-  const [existing, article, categories] = await Promise.all([
+  const [existing, article, tagRows] = await Promise.all([
     isWeb ? findByUrl(token, databaseId, tab.url) : Promise.resolve(null),
     isWeb ? extractArticle(tab.id) : Promise.resolve(null),
-    schema.categoryName
-      ? loadCategories(token, schema.categoryDbId).catch(() => ({
+    schema.tagRelName
+      ? loadTagRows(token, schema.tagRelDbId).catch(() => ({
           titleName: "Name",
           options: [],
         }))
@@ -314,8 +326,8 @@ async function main() {
     return;
   }
 
-  state.categoryOptions = categories.options || [];
-  state.categoryTitleName = categories.titleName || "Name";
+  state.tagOptions = tagRows.options || [];
+  state.tagTitleName = tagRows.titleName || "Name";
 
   state.article = article || {
     title: (tab && tab.title) || (tab && tab.url) || "",
@@ -323,15 +335,6 @@ async function main() {
     selection: "",
     paragraphs: [],
   };
-
-  const suggestions = Array.from(
-    new Set([
-      ...(state.profile.predefinedTags || []),
-      ...((schema && schema.tagOptions) || []),
-    ])
-  ).sort((a, b) => a.localeCompare(b));
-  setupTagInput(suggestions);
-  showFlags();
 
   const note = state.article.selection || "";
   document.getElementById("note-field").classList.toggle("hidden", !note);
@@ -359,11 +362,8 @@ function enterNewMode() {
   title.value = state.article.title || (state.tab && state.tab.url) || "";
   title.disabled = false;
   fillStatusOptions(statusList()[0]); // default = first status (e.g. Inbox)
-  document.getElementById("favourite").checked = false;
-  document.getElementById("archive").checked = false;
-  selectedTags.clear();
-  renderChips();
-  showCategoryField([]);
+  setupTags([]);
+  setupTypeField("");
   document.getElementById("save").textContent = "Save";
   show("form");
   document.getElementById("tag-input").focus();
@@ -384,12 +384,10 @@ function enterEditMode(existing) {
   title.value = existing.title;
   title.disabled = true;
   fillStatusOptions(existing.status || statusList()[0]);
-  document.getElementById("favourite").checked = !!existing.favourite;
-  document.getElementById("archive").checked = !!existing.archive;
-  selectedTags.clear();
-  (existing.tags || []).forEach((t) => selectedTags.add(t));
-  renderChips();
-  showCategoryField(existing.categories || []);
+  const useRelation = !!(state.schema && state.schema.tagRelName);
+  const preselect = useRelation ? existing.tagRefs : existing.tags;
+  setupTags(preselect || []);
+  setupTypeField(existing.type || "");
   document.getElementById("save").textContent = "Update";
   show("form");
   document.getElementById("tag-input").focus();
@@ -432,14 +430,30 @@ async function save() {
 
   const input = document.getElementById("tag-input");
   if (input.value.trim()) {
-    addTag(input.value);
+    // flush a half-typed tag (relation create may be async)
+    const raw = input.value.trim();
+    const hit = tagByLabel.get(raw.toLowerCase());
+    if (hit) addTagItem(hit.value, hit.label);
+    else if (state.tagsMode === "multi_select") addTagItem(raw, raw);
+    else if (state.tagsMode === "relation") {
+      try {
+        const created = await createTagRow(
+          state.profile.token,
+          state.schema.tagRelDbId,
+          state.tagTitleName,
+          raw
+        );
+        addTagItem(created.id, created.name);
+      } catch (_) {}
+    }
     input.value = "";
   }
-  const tags = Array.from(selectedTags);
-  const categories = Array.from(selectedCategories.keys());
+
+  const tagData = selectedTagData();
   const status = document.getElementById("status").value;
-  const favourite = document.getElementById("favourite").checked;
-  const archive = document.getElementById("archive").checked;
+  const typeEl = document.getElementById("type");
+  const type =
+    state.schema && state.schema.typeName ? typeEl.value || "" : undefined;
   const note = document.getElementById("note").value;
   const { token, databaseId } = state.profile;
 
@@ -449,7 +463,7 @@ async function save() {
       await updateEntry(
         token,
         state.editingId,
-        { tags, status, favourite, archive, categories },
+        { ...tagData, status, type },
         state.schema
       );
       const blocks = noteBlocks(note);
@@ -462,11 +476,9 @@ async function save() {
         {
           title: document.getElementById("title").value.trim(),
           url: state.tab.url,
-          tags,
-          categories,
+          ...tagData,
           status,
-          favourite,
-          archive,
+          type,
           site: state.article.siteName || "",
           author: state.article.byline || "",
           publishedTime: state.article.publishedTime || "",

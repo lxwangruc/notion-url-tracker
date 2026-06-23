@@ -47,31 +47,18 @@
           <textarea id="note" rows="3"></textarea>
         </div>
 
-        <div class="field">
+        <div id="tag-field" class="field">
           <span>Tags</span>
           <div id="tag-chips" class="chips"></div>
           <input
             id="tag-input"
             type="text"
             list="tag-suggestions"
-            placeholder="Type a tag and press Enter"
+            placeholder="Pick a tag, or type a new one + Enter"
             autocomplete="off"
           />
           <datalist id="tag-suggestions"></datalist>
-        </div>
-
-        <div id="category-field" class="field hidden">
-          <span>Category</span>
-          <div id="category-chips" class="chips"></div>
-          <input
-            id="category-input"
-            type="text"
-            list="category-suggestions"
-            placeholder="Pick a category, or type a new one + Enter"
-            autocomplete="off"
-          />
-          <datalist id="category-suggestions"></datalist>
-          <p id="category-state" class="muted small"></p>
+          <p id="tag-state" class="muted small"></p>
         </div>
 
         <label class="field">
@@ -79,14 +66,10 @@
           <select id="status"></select>
         </label>
 
-        <div id="flags" class="flags">
-          <label id="fav-wrap" class="checkbox hidden">
-            <input id="favourite" type="checkbox" /> <span>★ Favourite</span>
-          </label>
-          <label id="arch-wrap" class="checkbox hidden">
-            <input id="archive" type="checkbox" /> <span>Archive</span>
-          </label>
-        </div>
+        <label id="type-field" class="field hidden">
+          <span>Type</span>
+          <select id="type"></select>
+        </label>
 
         <div class="actions">
           <button id="save" class="primary">Save</button>

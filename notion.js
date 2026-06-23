@@ -121,8 +121,13 @@ export async function createDatabase(token, parentPageId, title = "Read Later") 
 // pointing at the template, which has no Tags property by default).
 export async function ensureTagsProperty(token, databaseId) {
   const db = await notionFetch(token, `/databases/${databaseId}`);
-  const named = (db.properties || {}).Tags;
-  if (named && named.type === "multi_select") return false;
+  const props = db.properties || {};
+  // If tags are handled by a relation (the template's renamed "Tags"/"Category"
+  // relation), don't add a multi-select — it would clobber that property.
+  const hasRelation = Object.values(props).some((p) => p.type === "relation");
+  if (hasRelation) return false;
+  // A property named "Tags" already exists (any type) — leave it alone.
+  if (props.Tags) return false;
   await notionFetch(token, `/databases/${databaseId}`, {
     method: "PATCH",
     body: { properties: { Tags: { multi_select: {} } } },
@@ -152,8 +157,8 @@ export async function getSchema(token, databaseId) {
     authorName: null,
     publishedName: null,
     savedName: null,
-    categoryName: null,
-    categoryDbId: null,
+    tagRelName: null,
+    tagRelDbId: null,
     sortName: null,
     dbTitle: plainTitle(db.title),
     missing: [],
@@ -206,10 +211,15 @@ export async function getSchema(token, databaseId) {
         else if (name === "Saved") schema.savedName = name;
         break;
       case "relation":
-        // Prefer a relation named like "Category"; otherwise take the first.
-        if (/^categor/i.test(name) || !schema.categoryName) {
-          schema.categoryName = name;
-          schema.categoryDbId =
+        // The relation is treated as "Tags" (reusable rows in a linked DB).
+        // Prefer a relation named like Tag/Category; otherwise take the first.
+        if (
+          /^tags?$/i.test(name) ||
+          /^categor/i.test(name) ||
+          !schema.tagRelName
+        ) {
+          schema.tagRelName = name;
+          schema.tagRelDbId =
             (prop.relation && prop.relation.database_id) || null;
         }
         break;
@@ -263,11 +273,11 @@ export async function queryRecent(token, databaseId, n = 10, sortName = null) {
   return (data.results || []).map(parseEntry);
 }
 
-// ---- Categories (relation target) -------------------------------------------
+// ---- Tags (relation target database) ----------------------------------------
 
-// Load the related "Categories" database: returns its title property name and
-// the list of existing rows as { id, name }.
-export async function loadCategories(token, databaseId) {
+// Load the related "Tags" database: returns its title property name and the
+// list of existing rows as { id, name }.
+export async function loadTagRows(token, databaseId) {
   const db = await notionFetch(token, `/databases/${databaseId}`);
   let titleName = "Name";
   for (const [name, prop] of Object.entries(db.properties || {})) {
@@ -293,8 +303,8 @@ export async function loadCategories(token, databaseId) {
   return { titleName, options };
 }
 
-// Create a new category row and return { id, name }.
-export async function createCategory(token, databaseId, titleName, name) {
+// Create a new tag row and return { id, name }.
+export async function createTagRow(token, databaseId, titleName, name) {
   const page = await notionFetch(token, "/pages", {
     method: "POST",
     body: {
@@ -390,9 +400,9 @@ function buildProperties(schema, data) {
   }
   if (data.saved !== undefined && schema.savedName)
     p[schema.savedName] = { date: { start: data.saved } };
-  if (data.categories !== undefined && schema.categoryName)
-    p[schema.categoryName] = {
-      relation: (data.categories || []).map((id) => ({ id })),
+  if (data.tagRefs !== undefined && schema.tagRelName)
+    p[schema.tagRelName] = {
+      relation: (data.tagRefs || []).map((id) => ({ id })),
     };
   return p;
 }
@@ -407,7 +417,8 @@ function parseEntry(page) {
   let status = "";
   let favourite = false;
   let archive = false;
-  let categories = [];
+  let tagRefs = [];
+  let type = "";
   for (const [name, prop] of Object.entries(props)) {
     switch (prop.type) {
       case "title":
@@ -424,14 +435,15 @@ function parseEntry(page) {
         break;
       case "select":
         if (name === "Status" && prop.select) status = prop.select.name;
+        else if (name === "Type" && prop.select) type = prop.select.name;
         break;
       case "checkbox":
         if (/^favou?rite$/i.test(name)) favourite = prop.checkbox;
         else if (/^archive$/i.test(name)) archive = prop.checkbox;
         break;
       case "relation":
-        if (/^categor/i.test(name) || !categories.length)
-          categories = (prop.relation || []).map((r) => r.id);
+        if (/^tags?$/i.test(name) || /^categor/i.test(name) || !tagRefs.length)
+          tagRefs = (prop.relation || []).map((r) => r.id);
         break;
       default:
         break;
@@ -446,7 +458,8 @@ function parseEntry(page) {
     status,
     favourite,
     archive,
-    categories,
+    tagRefs,
+    type,
   };
 }
 
