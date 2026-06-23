@@ -53,21 +53,39 @@
       <section class="card">
         <h2>2. Choose database</h2>
         <p class="muted">
-          Pick a parent page shared with the integration, then create the
-          read-later database inside it.
+          <strong>Using the Link Tracker template?</strong> Duplicate it into your
+          Notion, share the page with your integration, then pick its
+          <em>Links</em> database below — a Tags property is added automatically if
+          missing.
         </p>
         <div class="row">
-          <select id="parent-page">
-            <option value="">— select a parent page —</option>
+          <select id="db-select">
+            <option value="">— select an existing database —</option>
           </select>
-          <button id="refresh-pages" class="ghost" title="Reload pages">⟳</button>
+          <button id="refresh-dbs" class="ghost" title="Reload databases">⟳</button>
         </div>
         <div class="row">
-          <button id="create-db" class="primary">Create database</button>
+          <button id="use-db" class="primary">Use selected database</button>
           <span id="db-status" class="status"></span>
         </div>
+
         <details>
-          <summary>Use an existing database instead</summary>
+          <summary>Or create a brand-new database</summary>
+          <p class="muted small">
+            Pick a parent page shared with the integration, then create an inline
+            read-later database inside it.
+          </p>
+          <div class="row">
+            <select id="parent-page">
+              <option value="">— select a parent page —</option>
+            </select>
+            <button id="refresh-pages" class="ghost" title="Reload pages">⟳</button>
+          </div>
+          <button id="create-db" class="ghost">Create database</button>
+        </details>
+
+        <details>
+          <summary>Or paste a database ID</summary>
           <label class="field">
             <span>Database ID</span>
             <input id="db-id" type="text" placeholder="32-character database id" />

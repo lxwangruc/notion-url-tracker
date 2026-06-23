@@ -8,7 +8,7 @@ import {
   getSettings,
   updateSettings,
 } from "./store.js";
-import { searchPages, createDatabase } from "./notion.js";
+import { searchPages, searchDatabases, createDatabase, ensureTagsProperty, getSchema } from "./notion.js";
 
 function setStatus(id, message, kind = "") {
   const el = document.getElementById(id);
@@ -49,9 +49,64 @@ async function loadProfileIntoForm() {
     : "No database set for this profile yet.";
   setStatus("token-status", current.token ? "Token set" : "", current.token ? "ok" : "");
   setStatus("db-status", "");
-  if (current.token) await loadPages();
-  else document.getElementById("parent-page").innerHTML =
-    '<option value="">— select a parent page —</option>';
+  if (current.token) {
+    await loadPages();
+    await loadDatabases();
+  } else {
+    document.getElementById("parent-page").innerHTML =
+      '<option value="">— select a parent page —</option>';
+    document.getElementById("db-select").innerHTML =
+      '<option value="">— select an existing database —</option>';
+  }
+}
+
+async function loadDatabases() {
+  if (!current.token) return;
+  const select = document.getElementById("db-select");
+  try {
+    const dbs = await searchDatabases(current.token);
+    select.innerHTML =
+      '<option value="">— select an existing database —</option>';
+    for (const db of dbs) {
+      const opt = document.createElement("option");
+      opt.value = db.id;
+      opt.textContent = db.title;
+      if (db.id === current.databaseId) opt.selected = true;
+      select.appendChild(opt);
+    }
+  } catch (e) {
+    showError(e.message || "Could not list databases.");
+  }
+}
+
+// Point the profile at a database: ensure a Tags property and validate schema.
+async function applyDatabase(id) {
+  setStatus("db-status", "Checking database…");
+  try {
+    const added = await ensureTagsProperty(current.token, id);
+    const schema = await getSchema(current.token, id);
+    await updateProfile(current.id, { databaseId: id });
+    current.databaseId = id;
+    document.getElementById("db-id").value = id;
+    document.getElementById("current-db").textContent =
+      "Current database: " + (schema.dbTitle || id);
+    let msg = "Database set ✓";
+    if (added) msg += " (added Tags property)";
+    if (schema.missing.length) {
+      showError(
+        "Warning: this database is missing " +
+          schema.missing.join(" and ") +
+          ". Saving may fail until you add it."
+      );
+    } else {
+      showError("");
+    }
+    setStatus("db-status", msg, "ok");
+    await loadDatabases();
+  } catch (e) {
+    setStatus("db-status", "");
+    showError(e.message || "Could not use this database.");
+  }
 }
 
 async function loadPages() {
@@ -135,11 +190,20 @@ document.getElementById("save-token").onclick = async () => {
   current.token = token;
   setStatus("token-status", "Saved. Loading pages…", "ok");
   await loadPages();
+  await loadDatabases();
 };
 
 document.getElementById("refresh-pages").onclick = loadPages;
+document.getElementById("refresh-dbs").onclick = loadDatabases;
 
 // Database
+document.getElementById("use-db").onclick = async () => {
+  showError("");
+  const id = document.getElementById("db-select").value;
+  if (!current.token) return setStatus("db-status", "Save a token first", "err");
+  if (!id) return setStatus("db-status", "Pick a database", "err");
+  await applyDatabase(id);
+};
 document.getElementById("create-db").onclick = async () => {
   showError("");
   const parentId = document.getElementById("parent-page").value;
@@ -154,6 +218,7 @@ document.getElementById("create-db").onclick = async () => {
     document.getElementById("current-db").textContent =
       "Current database: " + db.id;
     setStatus("db-status", "Database created ✓", "ok");
+    await loadDatabases();
   } catch (e) {
     setStatus("db-status", "");
     showError(e.message || "Could not create database.");
@@ -163,10 +228,7 @@ document.getElementById("save-db-id").onclick = async () => {
   showError("");
   const id = document.getElementById("db-id").value.trim();
   if (!id) return;
-  await updateProfile(current.id, { databaseId: id });
-  current.databaseId = id;
-  document.getElementById("current-db").textContent = "Current database: " + id;
-  setStatus("db-status", "Database ID saved ✓", "ok");
+  await applyDatabase(id);
 };
 
 // Tags

@@ -6,7 +6,7 @@ import {
   getSettings,
   profileIsReady,
 } from "./store.js";
-import { findByUrl, createEntry } from "./notion.js";
+import { findByUrl, createEntry, getSchema } from "./notion.js";
 import { extractArticle } from "./extract.js";
 
 const ICON = "icons/icon128.png";
@@ -83,25 +83,34 @@ async function savePage(tab, selectionText = "") {
       notify("Already saved", existing.title || tab.url);
       return;
     }
+    const schema = await getSchema(profile.token, profile.databaseId);
+    const defaultStatus = schema.statusOptions[0] || "Inbox";
     const article =
       (await extractArticle(tab.id)) || {
         title: tab.title || tab.url,
         siteName: hostOf(tab.url),
         paragraphs: [],
       };
-    const page = await createEntry(profile.token, profile.databaseId, {
-      title: article.title,
-      url: tab.url,
-      tags: [],
-      status: "Unread",
-      site: article.siteName,
-      author: article.byline,
-      publishedTime: article.publishedTime,
-      image: article.image,
-      selection: selectionText || article.selection || "",
-      paragraphs: article.paragraphs || [],
-      bodyFormat: settings.bodyFormat,
-    });
+    const page = await createEntry(
+      profile.token,
+      profile.databaseId,
+      {
+        title: article.title,
+        url: tab.url,
+        tags: [],
+        status: defaultStatus,
+        favourite: false,
+        archive: false,
+        site: article.siteName,
+        author: article.byline,
+        publishedTime: article.publishedTime,
+        image: article.image,
+        selection: selectionText || article.selection || "",
+        paragraphs: article.paragraphs || [],
+        bodyFormat: settings.bodyFormat,
+      },
+      schema
+    );
     badgeTick(tab.id);
     notify("Saved to Notion ✓", article.title || tab.url);
     return page;
@@ -121,15 +130,24 @@ async function saveLink(linkUrl, selectionText, tabId) {
       notify("Already saved", existing.title || linkUrl);
       return;
     }
-    await createEntry(profile.token, profile.databaseId, {
-      title: selectionText || linkUrl,
-      url: linkUrl,
-      tags: [],
-      status: "Unread",
-      site: hostOf(linkUrl),
-      paragraphs: [],
-      bodyFormat: "bookmark", // link only: store a preview, no article text
-    });
+    const schema = await getSchema(profile.token, profile.databaseId);
+    const defaultStatus = schema.statusOptions[0] || "Inbox";
+    await createEntry(
+      profile.token,
+      profile.databaseId,
+      {
+        title: selectionText || linkUrl,
+        url: linkUrl,
+        tags: [],
+        status: defaultStatus,
+        favourite: false,
+        archive: false,
+        site: hostOf(linkUrl),
+        paragraphs: [],
+        bodyFormat: "bookmark", // link only: store a preview, no article text
+      },
+      schema
+    );
     if (tabId != null) badgeTick(tabId);
     notify("Link saved to Notion ✓", selectionText || linkUrl);
   } catch (e) {

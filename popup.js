@@ -6,9 +6,9 @@ import {
   profileIsReady,
 } from "./store.js";
 import {
-  STATUS_OPTIONS,
+  DEFAULT_STATUS_OPTIONS,
+  getSchema,
   findByUrl,
-  getDatabaseTags,
   queryRecent,
   createEntry,
   updateEntry,
@@ -84,10 +84,18 @@ function setupTagInput(suggestions) {
   };
 }
 
+function statusList() {
+  const opts =
+    state.schema && state.schema.statusOptions.length
+      ? state.schema.statusOptions
+      : DEFAULT_STATUS_OPTIONS;
+  return opts;
+}
 function fillStatusOptions(selected) {
   const sel = document.getElementById("status");
   sel.innerHTML = "";
-  for (const s of STATUS_OPTIONS) {
+  const opts = statusList();
+  for (const s of opts) {
     const opt = document.createElement("option");
     opt.value = s;
     opt.textContent = s;
@@ -96,14 +104,25 @@ function fillStatusOptions(selected) {
   }
 }
 
+function showFlags() {
+  const fav = state.schema && state.schema.favouriteName;
+  const arch = state.schema && state.schema.archiveName;
+  document.getElementById("fav-wrap").classList.toggle("hidden", !fav);
+  document.getElementById("arch-wrap").classList.toggle("hidden", !arch);
+  document
+    .getElementById("flags")
+    .classList.toggle("hidden", !fav && !arch);
+}
+
 // ---- State ------------------------------------------------------------------
 
 const state = {
   tab: null,
   profile: null,
   settings: null,
+  schema: null,
   article: null,
-  mode: "new", // "new" | "edit"
+  mode: "new",
   editingId: null,
   editingPageUrl: null,
 };
@@ -123,6 +142,7 @@ async function buildProfileSelect() {
   sel.onchange = async () => {
     await setActiveProfile(sel.value);
     selectedTags.clear();
+    state.schema = null;
     main();
   };
 }
@@ -144,23 +164,21 @@ async function main() {
 
   show("loading");
 
-  const [existing, article, dbTags] = await Promise.all([
-    isWeb
-      ? findByUrl(state.profile.token, state.profile.databaseId, tab.url)
-      : Promise.resolve(null),
+  const { token, databaseId } = state.profile;
+  const [existing, article, schema] = await Promise.all([
+    isWeb ? findByUrl(token, databaseId, tab.url) : Promise.resolve(null),
     isWeb ? extractArticle(tab.id) : Promise.resolve(null),
-    getDatabaseTags(state.profile.token, state.profile.databaseId).catch(
-      () => []
-    ),
+    getSchema(token, databaseId),
   ]).catch((e) => {
     showError(e.message || "Failed to reach Notion.");
-    return ["__err__", null, []];
+    return ["__err__", null, null];
   });
 
   if (existing === "__err__") {
     show("form");
     return;
   }
+  state.schema = schema;
 
   state.article = article || {
     title: (tab && tab.title) || (tab && tab.url) || "",
@@ -170,21 +188,20 @@ async function main() {
   };
 
   const suggestions = Array.from(
-    new Set([...(state.profile.predefinedTags || []), ...dbTags])
+    new Set([
+      ...(state.profile.predefinedTags || []),
+      ...((schema && schema.tagOptions) || []),
+    ])
   ).sort((a, b) => a.localeCompare(b));
   setupTagInput(suggestions);
+  showFlags();
 
-  // Selection note.
   const note = state.article.selection || "";
   document.getElementById("note-field").classList.toggle("hidden", !note);
   document.getElementById("note").value = note;
 
   if (!isWeb) {
-    state.mode = "new";
-    document.getElementById("dup-banner").classList.add("hidden");
-    document.getElementById("title").value = state.article.title;
-    fillStatusOptions("Unread");
-    renderChips();
+    enterNewMode();
     show("form");
     showError("This page can't be read; only http/https pages are supported.");
     document.getElementById("save").disabled = true;
@@ -192,12 +209,8 @@ async function main() {
   }
 
   document.getElementById("save").disabled = false;
-
-  if (existing) {
-    enterEditMode(existing);
-  } else {
-    enterNewMode();
-  }
+  if (existing) enterEditMode(existing);
+  else enterNewMode();
 }
 
 function enterNewMode() {
@@ -206,9 +219,11 @@ function enterNewMode() {
   document.getElementById("dup-banner").classList.add("hidden");
   document.getElementById("form-title").textContent = "Save to read-later";
   const title = document.getElementById("title");
-  title.value = state.article.title || state.tab.url;
+  title.value = state.article.title || (state.tab && state.tab.url) || "";
   title.disabled = false;
-  fillStatusOptions("Unread");
+  fillStatusOptions(statusList()[0]); // default = first status (e.g. Inbox)
+  document.getElementById("favourite").checked = false;
+  document.getElementById("archive").checked = false;
   selectedTags.clear();
   renderChips();
   document.getElementById("save").textContent = "Save";
@@ -230,7 +245,9 @@ function enterEditMode(existing) {
   const title = document.getElementById("title");
   title.value = existing.title;
   title.disabled = true;
-  fillStatusOptions(existing.status);
+  fillStatusOptions(existing.status || statusList()[0]);
+  document.getElementById("favourite").checked = !!existing.favourite;
+  document.getElementById("archive").checked = !!existing.archive;
   selectedTags.clear();
   (existing.tags || []).forEach((t) => selectedTags.add(t));
   renderChips();
@@ -249,7 +266,9 @@ function noteBlocks(text) {
     out.push({
       object: "block",
       type: "quote",
-      quote: { rich_text: [{ type: "text", text: { content: t.slice(i, i + 1900) } }] },
+      quote: {
+        rich_text: [{ type: "text", text: { content: t.slice(i, i + 1900) } }],
+      },
     });
   }
   return out;
@@ -258,7 +277,10 @@ function noteBlocks(text) {
 function tickBadge() {
   if (state.tab) {
     chrome.action.setBadgeText({ text: "✓", tabId: state.tab.id });
-    chrome.action.setBadgeBackgroundColor({ color: "#16a34a", tabId: state.tab.id });
+    chrome.action.setBadgeBackgroundColor({
+      color: "#16a34a",
+      tabId: state.tab.id,
+    });
   }
 }
 
@@ -276,30 +298,44 @@ async function save() {
   }
   const tags = Array.from(selectedTags);
   const status = document.getElementById("status").value;
+  const favourite = document.getElementById("favourite").checked;
+  const archive = document.getElementById("archive").checked;
   const note = document.getElementById("note").value;
   const { token, databaseId } = state.profile;
 
   try {
     let pageUrl;
     if (state.mode === "edit") {
-      await updateEntry(token, state.editingId, { tags, status });
+      await updateEntry(
+        token,
+        state.editingId,
+        { tags, status, favourite, archive },
+        state.schema
+      );
       const blocks = noteBlocks(note);
       if (blocks.length) await appendBlocks(token, state.editingId, blocks);
       pageUrl = state.editingPageUrl;
     } else {
-      const page = await createEntry(token, databaseId, {
-        title: document.getElementById("title").value.trim(),
-        url: state.tab.url,
-        tags,
-        status,
-        site: state.article.siteName || "",
-        author: state.article.byline || "",
-        publishedTime: state.article.publishedTime || "",
-        image: state.article.image || "",
-        selection: note,
-        paragraphs: state.article.paragraphs || [],
-        bodyFormat: state.settings.bodyFormat,
-      });
+      const page = await createEntry(
+        token,
+        databaseId,
+        {
+          title: document.getElementById("title").value.trim(),
+          url: state.tab.url,
+          tags,
+          status,
+          favourite,
+          archive,
+          site: state.article.siteName || "",
+          author: state.article.byline || "",
+          publishedTime: state.article.publishedTime || "",
+          image: state.article.image || "",
+          selection: note,
+          paragraphs: state.article.paragraphs || [],
+          bodyFormat: state.settings.bodyFormat,
+        },
+        state.schema
+      );
       pageUrl = page.url;
     }
     tickBadge();
@@ -326,7 +362,8 @@ async function loadRecent() {
   document.getElementById("recent-empty").classList.add("hidden");
   try {
     const { token, databaseId } = state.profile;
-    const items = await queryRecent(token, databaseId, 10);
+    const sortName = state.schema ? state.schema.sortName : null;
+    const items = await queryRecent(token, databaseId, 10, sortName);
     list.innerHTML = "";
     if (!items.length) {
       document.getElementById("recent-empty").classList.remove("hidden");
@@ -340,6 +377,10 @@ async function loadRecent() {
 }
 
 function recentRow(item) {
+  const opts = statusList();
+  const unread = opts[0];
+  const read = opts[opts.length - 1];
+
   const row = document.createElement("div");
   row.className = "recent-row";
 
@@ -350,22 +391,26 @@ function recentRow(item) {
   main.onclick = () => chrome.tabs.create({ url: item.pageUrl });
 
   const pill = document.createElement("span");
-  pill.className = "pill pill-" + item.status.toLowerCase();
-  pill.textContent = item.status;
+  pill.className = "pill";
+  pill.textContent = item.status || "—";
 
   const toggle = document.createElement("button");
   toggle.className = "ghost xs";
-  const makeLabel = (s) => (s === "Read" ? "↩ Unread" : "✓ Read");
-  toggle.textContent = makeLabel(item.status);
+  const label = (s) => (s === read ? `↩ ${unread}` : `✓ ${read}`);
+  toggle.textContent = label(item.status);
   toggle.onclick = async () => {
     toggle.disabled = true;
-    const next = item.status === "Read" ? "Unread" : "Read";
+    const next = item.status === read ? unread : read;
     try {
-      await updateEntry(state.profile.token, item.id, { status: next });
+      await updateEntry(
+        state.profile.token,
+        item.id,
+        { status: next },
+        state.schema
+      );
       item.status = next;
-      pill.className = "pill pill-" + next.toLowerCase();
       pill.textContent = next;
-      toggle.textContent = makeLabel(next);
+      toggle.textContent = label(next);
     } catch (e) {
       showError(e.message || "Update failed.");
     } finally {
@@ -376,7 +421,6 @@ function recentRow(item) {
   const meta = document.createElement("div");
   meta.className = "recent-meta";
   meta.append(pill, toggle);
-
   row.append(main, meta);
   return row;
 }

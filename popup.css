@@ -300,3 +300,20 @@ button.xs {
   font-size: 11px;
   padding: 2px 7px;
 }
+
+/* Favourite / Archive toggles */
+.flags {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.checkbox input {
+  margin: 0;
+}

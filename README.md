@@ -12,8 +12,9 @@ database for "read later", synced across all your devices through Notion itself.
 - **Selection capture** — if you've highlighted text, it's saved as a quote/note
   at the top of the entry (and shown in the popup so you can edit it first).
 - **Tags** — pick from a predefined list or add new ones on the fly.
-- **Status** — **Unread** (default), **Read**, **Archived**, or **Trash**.
-- **Recent list in the popup** — see your last 10 saves and flip Read/Unread
+- **Status, Favourite & Archive** — set the entry's status and toggle
+  Favourite/Archive (the available statuses are read from your database).
+- **Recent list in the popup** — see your last 10 saves and flip status
   inline, so the popup doubles as a mini reading list.
 - **Edit-after-save** — open the popup on a page you already saved to change its
   tags/status (or append a new quote) without leaving the browser.
@@ -58,16 +59,23 @@ page it has access to.
 
 1. Click the extension icon → **Open settings** (or right-click → **Options**).
 2. **Step 1 — Connect Notion:** paste your integration token → **Save & connect**.
-3. **Step 2 — Choose database:** select the parent page you shared above →
-   **Create database**. The database is created **inline**, so it shows up as a
-   live table embedded in that page (not just a link). (Or expand "Use an
-   existing database instead" and paste a database ID.)
+3. **Step 2 — Choose database** — two options:
+   - **Use the Link Tracker template** (recommended): in Notion, open the
+     [Link Tracker template](https://elite-carver-cc0.notion.site/Link-Tracker-1b8eed27689980c3b61fca1ec71f3231),
+     click **Duplicate** (top-right) to copy it into your workspace, share that
+     page with your integration, then in settings pick its **Links** database
+     from the **"select an existing database"** dropdown. A `Tags` property is
+     added automatically if it's missing.
+   - **Create a fresh one:** expand "Or create a brand-new database", pick a
+     parent page, and **Create database** (created inline as a live table).
 4. **Step 3 — Predefined tags:** optionally enter your common tags (one per line).
+5. **Settings:** choose how page content is stored, and toggle the saved-indicator.
 
 ## 5. Save pages
 
-1. Open any article and click the extension icon.
-2. The popup reads the page, adds/edits tags, and lets you set Unread/Read.
+1. Open any article and click the extension icon (or press the shortcut).
+2. The popup reads the page; add tags, set the Status, and toggle
+   Favourite/Archive.
 3. Click **Save** — the entry appears in your Notion database, with the article
    text in the page body.
 
@@ -75,19 +83,28 @@ page it has access to.
 
 ## Notion database schema
 
-The auto-created database has these properties:
+This extension is **schema-aware**: it reads your database's properties and only
+writes the ones that exist, so it works with the **Link Tracker template** as-is
+(plus an auto-added `Tags` property).
 
-| Property | Type         | Notes                          |
-| -------- | ------------ | ------------------------------ |
-| Name     | Title        | Article/page title             |
-| URL      | URL          | The saved link                 |
-| Tags     | Multi-select | Your tags                      |
-| Status   | Select       | `Unread` (default) / `Read`    |
-| Site     | Text         | Source site name               |
-| Saved    | Date         | When you saved it              |
+**Required:** a `title` property, a `URL` (url) property, and a `Status`
+property (either a *Status*-type or a *Select*; its options are read from the
+database). **Used if present:** `Tags` (multi-select), `Favourite`/`Archive`
+(checkbox), `Type` (select), `Site`/`Author` (text), `Published`/`Saved` (date).
 
-If you bring your **own** database, it must contain (at least) properties named
-`URL`, `Tags`, and `Status` for duplicate detection and saving to work.
+The extension's own auto-created database uses these properties:
+
+| Property         | Type         | Notes                              |
+| ---------------- | ------------ | ---------------------------------- |
+| Name             | Title        | Article/page title                 |
+| URL              | URL          | The saved link                     |
+| Status           | Select       | `Inbox` (default)/`To review`/`Reviewed` |
+| Type             | Select       | Video/Article/Podcast/…            |
+| Tags             | Multi-select | Your tags                          |
+| Favourite        | Checkbox     |                                    |
+| Archive          | Checkbox     |                                    |
+| Site             | Text         | Source site name                   |
+| Saved            | Date         | When you saved it                  |
 
 ## Reading on mobile
 
@@ -105,9 +122,12 @@ explicitly save) and host access to `https://api.notion.com/*` only.
 
 ```
 manifest.json        MV3 manifest
+background.js         Service worker: shortcuts, context menu, badges
 popup.html/.js/.css  Save flow (the one-click popup)
-options.html/.js/.css Setup: token, database, tags
-notion.js            Notion API client (shared)
+options.html/.js/.css Setup: profiles, database, tags, settings
+notion.js            Schema-aware Notion API client (shared)
+store.js             Profiles + settings (chrome.storage.local)
+extract.js           Page content extraction (Readability)
 lib/Readability.js   Mozilla Readability (vendored, Apache-2.0)
 icons/               Toolbar icons
 ```
@@ -118,5 +138,11 @@ icons/               Toolbar icons
   integration (Step 2) and the token is correct.
 - **Nothing extracted / empty body** — Some pages (PDFs, internal `edge://`
   pages, login walls) can't be read; the URL and title are still saved.
-- **Saving fails with a property error** — Your existing database is missing one
-  of the required properties (`URL`, `Tags`, `Status`).
+- **Saving fails with a property error** — Your database is missing a required
+  property (a title, `URL`, or `Status`). The options page warns you about this
+  when you select the database.
+- **The template's Links database doesn't appear in the dropdown** — make sure
+  you shared the duplicated page with your integration; otherwise copy the
+  database's link in Notion and paste its ID under "Or paste a database ID".
+- **YouTube (and similar) links** save just the title + URL (and thumbnail
+  cover) — no noisy page-text dump.
