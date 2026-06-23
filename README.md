@@ -118,6 +118,36 @@ Your token, database ID, and predefined tags are stored only in the browser via
 `chrome.storage.local`. The extension requests `activeTab` (to read the page you
 explicitly save) and host access to `https://api.notion.com/*` only.
 
+## Migrating from an old database
+
+If you have entries in an earlier database (for example one the extension
+auto-created before you switched to the Link Tracker template), you can copy
+them into the new database with the included script. It copies each row's
+title, URL, tags, status, Favourite/Archive flags, and the full page body
+(the saved article text), and it skips rows whose URL already exists in the
+target so it is safe to re-run.
+
+1. Make sure your Notion integration is shared with **both** databases
+   (open each database → ••• → **Connections** → add your integration).
+2. Get each database's ID from its URL — open the database as a full page; the
+   32-character chunk before `?v=` is the ID.
+3. Run (requires Node 18+):
+
+   ```bash
+   NOTION_TOKEN=secret_xxx \
+   SOURCE_DB=<old-database-id> \
+   TARGET_DB=<new-database-id> \
+   node tools/migrate.mjs
+   ```
+
+   Optional flags: `DRY_RUN=1` (preview only, writes nothing),
+   `NO_BODY=1` (copy properties only, skip page bodies),
+   `NO_DEDUPE=1` (don't skip rows already in the target).
+
+Status values are mapped to the template's options (Unread→Inbox, Read→Reviewed,
+Archived/Trash→Archive checkbox, etc.). Edit `STATUS_MAP` at the top of
+`tools/migrate.mjs` if you want a different mapping.
+
 ## Project layout
 
 ```
@@ -129,6 +159,7 @@ notion.js            Schema-aware Notion API client (shared)
 store.js             Profiles + settings (chrome.storage.local)
 extract.js           Page content extraction (Readability)
 lib/Readability.js   Mozilla Readability (vendored, Apache-2.0)
+tools/migrate.mjs    One-off DB→DB migration script (Node)
 icons/               Toolbar icons
 ```
 
