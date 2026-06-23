@@ -13,6 +13,8 @@ import {
   createEntry,
   updateEntry,
   appendBlocks,
+  loadCategories,
+  createCategory,
 } from "./notion.js";
 import { extractArticle } from "./extract.js";
 
@@ -84,6 +86,119 @@ function setupTagInput(suggestions) {
   };
 }
 
+// ---- Categories (relation to the Categories database) -----------------------
+
+const selectedCategories = new Map(); // id -> name
+let categoryByName = new Map(); // lowercased name -> { id, name }
+let categoryById = new Map(); // id -> name
+
+function renderCategoryChips() {
+  const wrap = document.getElementById("category-chips");
+  wrap.innerHTML = "";
+  for (const [id, name] of selectedCategories) {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = name;
+    const x = document.createElement("button");
+    x.type = "button";
+    x.className = "chip-x";
+    x.textContent = "×";
+    x.onclick = () => {
+      selectedCategories.delete(id);
+      renderCategoryChips();
+    };
+    chip.appendChild(x);
+    wrap.appendChild(chip);
+  }
+}
+
+function addCategory(id, name) {
+  if (id) selectedCategories.set(id, name || categoryById.get(id) || id);
+  renderCategoryChips();
+}
+
+function indexCategories(options) {
+  categoryByName = new Map();
+  categoryById = new Map();
+  for (const o of options) {
+    categoryByName.set(o.name.toLowerCase(), o);
+    categoryById.set(o.id, o.name);
+  }
+  const datalist = document.getElementById("category-suggestions");
+  datalist.innerHTML = "";
+  for (const o of options) {
+    const opt = document.createElement("option");
+    opt.value = o.name;
+    datalist.appendChild(opt);
+  }
+}
+
+function setupCategoryInput() {
+  const input = document.getElementById("category-input");
+  const stateEl = document.getElementById("category-state");
+
+  async function commit() {
+    const raw = input.value.trim();
+    if (!raw) return;
+    const hit = categoryByName.get(raw.toLowerCase());
+    if (hit) {
+      addCategory(hit.id, hit.name);
+      input.value = "";
+      return;
+    }
+    // Create a new category row on the fly.
+    input.disabled = true;
+    stateEl.textContent = `Creating “${raw}”…`;
+    try {
+      const { token } = state.profile;
+      const created = await createCategory(
+        token,
+        state.schema.categoryDbId,
+        state.categoryTitleName,
+        raw
+      );
+      indexCategories([...categoryById.entries()]
+        .map(([id, name]) => ({ id, name }))
+        .concat([{ id: created.id, name: created.name }])
+        .sort((a, b) => a.name.localeCompare(b.name)));
+      addCategory(created.id, created.name);
+      input.value = "";
+      stateEl.textContent = "";
+    } catch (e) {
+      stateEl.textContent = e.message || "Could not create category.";
+    } finally {
+      input.disabled = false;
+      input.focus();
+    }
+  }
+
+  input.onkeydown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+    }
+  };
+  input.oninput = () => {
+    if (categoryByName.has(input.value.trim().toLowerCase())) {
+      const hit = categoryByName.get(input.value.trim().toLowerCase());
+      addCategory(hit.id, hit.name);
+      input.value = "";
+    }
+  };
+}
+
+function showCategoryField(preselectIds) {
+  const has = state.schema && state.schema.categoryName;
+  document.getElementById("category-field").classList.toggle("hidden", !has);
+  if (!has) return;
+  indexCategories(state.categoryOptions || []);
+  setupCategoryInput();
+  selectedCategories.clear();
+  for (const id of preselectIds || [])
+    addCategory(id, categoryById.get(id) || id);
+  renderCategoryChips();
+}
+
 function statusList() {
   const opts =
     state.schema && state.schema.statusOptions.length
@@ -122,6 +237,8 @@ const state = {
   settings: null,
   schema: null,
   article: null,
+  categoryOptions: [],
+  categoryTitleName: "Name",
   mode: "new",
   editingId: null,
   editingPageUrl: null,
@@ -165,20 +282,40 @@ async function main() {
   show("loading");
 
   const { token, databaseId } = state.profile;
-  const [existing, article, schema] = await Promise.all([
+  let schema;
+  try {
+    schema = await getSchema(token, databaseId);
+  } catch (e) {
+    state.schema = null;
+    enterNewMode();
+    show("form");
+    showError(e.message || "Failed to reach Notion.");
+    document.getElementById("save").disabled = true;
+    return;
+  }
+  state.schema = schema;
+
+  const [existing, article, categories] = await Promise.all([
     isWeb ? findByUrl(token, databaseId, tab.url) : Promise.resolve(null),
     isWeb ? extractArticle(tab.id) : Promise.resolve(null),
-    getSchema(token, databaseId),
+    schema.categoryName
+      ? loadCategories(token, schema.categoryDbId).catch(() => ({
+          titleName: "Name",
+          options: [],
+        }))
+      : Promise.resolve({ titleName: "Name", options: [] }),
   ]).catch((e) => {
     showError(e.message || "Failed to reach Notion.");
-    return ["__err__", null, null];
+    return ["__err__", null, { titleName: "Name", options: [] }];
   });
 
   if (existing === "__err__") {
     show("form");
     return;
   }
-  state.schema = schema;
+
+  state.categoryOptions = categories.options || [];
+  state.categoryTitleName = categories.titleName || "Name";
 
   state.article = article || {
     title: (tab && tab.title) || (tab && tab.url) || "",
@@ -226,6 +363,7 @@ function enterNewMode() {
   document.getElementById("archive").checked = false;
   selectedTags.clear();
   renderChips();
+  showCategoryField([]);
   document.getElementById("save").textContent = "Save";
   show("form");
   document.getElementById("tag-input").focus();
@@ -251,6 +389,7 @@ function enterEditMode(existing) {
   selectedTags.clear();
   (existing.tags || []).forEach((t) => selectedTags.add(t));
   renderChips();
+  showCategoryField(existing.categories || []);
   document.getElementById("save").textContent = "Update";
   show("form");
   document.getElementById("tag-input").focus();
@@ -297,6 +436,7 @@ async function save() {
     input.value = "";
   }
   const tags = Array.from(selectedTags);
+  const categories = Array.from(selectedCategories.keys());
   const status = document.getElementById("status").value;
   const favourite = document.getElementById("favourite").checked;
   const archive = document.getElementById("archive").checked;
@@ -309,7 +449,7 @@ async function save() {
       await updateEntry(
         token,
         state.editingId,
-        { tags, status, favourite, archive },
+        { tags, status, favourite, archive, categories },
         state.schema
       );
       const blocks = noteBlocks(note);
@@ -323,6 +463,7 @@ async function save() {
           title: document.getElementById("title").value.trim(),
           url: state.tab.url,
           tags,
+          categories,
           status,
           favourite,
           archive,

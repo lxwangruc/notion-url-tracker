@@ -60,6 +60,20 @@
           <datalist id="tag-suggestions"></datalist>
         </div>
 
+        <div id="category-field" class="field hidden">
+          <span>Category</span>
+          <div id="category-chips" class="chips"></div>
+          <input
+            id="category-input"
+            type="text"
+            list="category-suggestions"
+            placeholder="Pick a category, or type a new one + Enter"
+            autocomplete="off"
+          />
+          <datalist id="category-suggestions"></datalist>
+          <p id="category-state" class="muted small"></p>
+        </div>
+
         <label class="field">
           <span>Status</span>
           <select id="status"></select>

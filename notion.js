@@ -152,6 +152,8 @@ export async function getSchema(token, databaseId) {
     authorName: null,
     publishedName: null,
     savedName: null,
+    categoryName: null,
+    categoryDbId: null,
     sortName: null,
     dbTitle: plainTitle(db.title),
     missing: [],
@@ -203,6 +205,14 @@ export async function getSchema(token, databaseId) {
         if (name === "Published") schema.publishedName = name;
         else if (name === "Saved") schema.savedName = name;
         break;
+      case "relation":
+        // Prefer a relation named like "Category"; otherwise take the first.
+        if (/^categor/i.test(name) || !schema.categoryName) {
+          schema.categoryName = name;
+          schema.categoryDbId =
+            (prop.relation && prop.relation.database_id) || null;
+        }
+        break;
       default:
         break;
     }
@@ -251,6 +261,48 @@ export async function queryRecent(token, databaseId, n = 10, sortName = null) {
     body,
   });
   return (data.results || []).map(parseEntry);
+}
+
+// ---- Categories (relation target) -------------------------------------------
+
+// Load the related "Categories" database: returns its title property name and
+// the list of existing rows as { id, name }.
+export async function loadCategories(token, databaseId) {
+  const db = await notionFetch(token, `/databases/${databaseId}`);
+  let titleName = "Name";
+  for (const [name, prop] of Object.entries(db.properties || {})) {
+    if (prop.type === "title") {
+      titleName = name;
+      break;
+    }
+  }
+  const options = [];
+  let cursor;
+  do {
+    const body = { page_size: 100 };
+    if (cursor) body.start_cursor = cursor;
+    const data = await notionFetch(token, `/databases/${databaseId}/query`, {
+      method: "POST",
+      body,
+    });
+    for (const pg of data.results || [])
+      options.push({ id: pg.id, name: pageTitle(pg) });
+    cursor = data.has_more ? data.next_cursor : null;
+  } while (cursor);
+  options.sort((a, b) => a.name.localeCompare(b.name));
+  return { titleName, options };
+}
+
+// Create a new category row and return { id, name }.
+export async function createCategory(token, databaseId, titleName, name) {
+  const page = await notionFetch(token, "/pages", {
+    method: "POST",
+    body: {
+      parent: { database_id: databaseId },
+      properties: { [titleName || "Name"]: { title: [textNode(name)] } },
+    },
+  });
+  return { id: page.id, name };
 }
 
 // Create a new entry. `data` may include: title, url, tags[], status, favourite,
@@ -338,6 +390,10 @@ function buildProperties(schema, data) {
   }
   if (data.saved !== undefined && schema.savedName)
     p[schema.savedName] = { date: { start: data.saved } };
+  if (data.categories !== undefined && schema.categoryName)
+    p[schema.categoryName] = {
+      relation: (data.categories || []).map((id) => ({ id })),
+    };
   return p;
 }
 
@@ -351,6 +407,7 @@ function parseEntry(page) {
   let status = "";
   let favourite = false;
   let archive = false;
+  let categories = [];
   for (const [name, prop] of Object.entries(props)) {
     switch (prop.type) {
       case "title":
@@ -372,6 +429,10 @@ function parseEntry(page) {
         if (/^favou?rite$/i.test(name)) favourite = prop.checkbox;
         else if (/^archive$/i.test(name)) archive = prop.checkbox;
         break;
+      case "relation":
+        if (/^categor/i.test(name) || !categories.length)
+          categories = (prop.relation || []).map((r) => r.id);
+        break;
       default:
         break;
     }
@@ -385,6 +446,7 @@ function parseEntry(page) {
     status,
     favourite,
     archive,
+    categories,
   };
 }
 

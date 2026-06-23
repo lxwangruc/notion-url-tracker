@@ -90,7 +90,16 @@ writes the ones that exist, so it works with the **Link Tracker template** as-is
 **Required:** a `title` property, a `URL` (url) property, and a `Status`
 property (either a *Status*-type or a *Select*; its options are read from the
 database). **Used if present:** `Tags` (multi-select), `Favourite`/`Archive`
-(checkbox), `Type` (select), `Site`/`Author` (text), `Published`/`Saved` (date).
+(checkbox), `Type` (select), `Site`/`Author` (text), `Published`/`Saved` (date),
+and `Category` (relation — see below).
+
+### Categories
+
+If your database has a `Category` **relation** property (as the Link Tracker
+template does), the save popup shows a **Category** picker. You can attach one or
+several existing categories to a link, or type a new name + Enter to create the
+category row on the fly. The related Categories database's `Total Links` rollup
+updates automatically. Leave it empty to skip.
 
 The extension's own auto-created database uses these properties:
 
