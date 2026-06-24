@@ -1,7 +1,8 @@
 # Notion URL Tracker — Read Later
 
-A Microsoft Edge (Manifest V3) extension that saves the current page to a Notion
-database for "read later", synced across all your devices through Notion itself.
+A Manifest V3 browser extension — for **Microsoft Edge, Google Chrome, and
+Safari** — that saves the current page to a Notion database for "read later",
+synced across all your devices through Notion itself.
 
 - **One click → popup → add tags → save.** Keeps the URL and extracts the
   readable article text (via Mozilla Readability) into the Notion page body.
@@ -11,9 +12,11 @@ database for "read later", synced across all your devices through Notion itself.
   bookmark preview), or "Save this page to Notion" from the page menu.
 - **Selection capture** — if you've highlighted text, it's saved as a quote/note
   at the top of the entry (and shown in the popup so you can edit it first).
-- **Tags** — pick from a predefined list or add new ones on the fly.
-- **Status, Favourite & Archive** — set the entry's status and toggle
-  Favourite/Archive (the available statuses are read from your database).
+- **Tags** — a single picker backed by a relation database (each tag is a
+  reusable row, found-or-created on the fly) or a multi-select, chosen
+  automatically from your schema.
+- **Status & Type** — set the entry's status (read from your database) and an
+  editable **Type** (pick an option or type a new one) for "Links By Type".
 - **Recent list in the popup** — see your last 10 saves and flip status
   inline, so the popup doubles as a mini reading list.
 - **Edit-after-save** — open the popup on a page you already saved to change its
@@ -48,12 +51,47 @@ page it has access to.
    "Read Later".
 2. Open that page → **•••** (top-right) → **Connections** → add your integration.
 
-## 3. Load the extension in Edge
+## 3. Load the extension
+
+The same folder works in all three browsers (Manifest V3).
+
+### Microsoft Edge
 
 1. Open `edge://extensions`.
 2. Turn on **Developer mode** (bottom-left).
 3. Click **Load unpacked** and select this `notion-url-tracker` folder.
 4. Pin the extension so its icon is visible on the toolbar.
+
+### Google Chrome
+
+1. Open `chrome://extensions`.
+2. Turn on **Developer mode** (top-right).
+3. Click **Load unpacked** and select this `notion-url-tracker` folder.
+4. Pin the extension from the puzzle-piece menu.
+
+### Safari (macOS, needs Xcode)
+
+Safari can't load an unpacked folder directly — it runs Web Extensions wrapped
+in a small app, which you build once with Xcode (free; an Apple Developer
+account is only needed to share it with others).
+
+1. Install **Xcode** from the Mac App Store.
+2. Convert this folder into a Safari app project:
+   ```bash
+   xcrun safari-web-extension-converter /path/to/notion-url-tracker
+   ```
+   (Add `--macos-only` if you don't want the iOS target.)
+3. Xcode opens the generated project — press **▶ Run** to build and install it.
+4. In Safari: **Settings → Extensions**, enable **Notion URL Tracker**, and allow
+   it access to websites (Notion needs `api.notion.com`).
+5. To allow an unsigned local build: Safari **Settings → Advanced →** "Show
+   features for web developers", then **Develop → Allow Unsigned Extensions**.
+
+Notes for Safari:
+- Desktop **toast notifications aren't supported** by Safari Web Extensions, so
+  after a quick-save you'll see the toolbar **✓ badge** instead (the badge,
+  popup, context menu, shortcuts and saving all work).
+- Keyboard shortcuts may need to be (re)assigned in Safari's settings.
 
 ## 4. Configure it
 
@@ -186,8 +224,9 @@ icons/               Toolbar icons
 
 - **"Could not list pages."** — Make sure you shared at least one page with the
   integration (Step 2) and the token is correct.
-- **Nothing extracted / empty body** — Some pages (PDFs, internal `edge://`
-  pages, login walls) can't be read; the URL and title are still saved.
+- **Nothing extracted / empty body** — Some pages (PDFs, internal browser pages
+  like `edge://`/`chrome://`, login walls) can't be read; the URL and title are
+  still saved.
 - **Saving fails with a property error** — Your database is missing a required
   property (a title, `URL`, or `Status`). The options page warns you about this
   when you select the database.

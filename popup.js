@@ -407,13 +407,14 @@ function noteBlocks(text) {
 }
 
 function tickBadge() {
-  if (state.tab) {
+  if (!state.tab) return;
+  try {
     chrome.action.setBadgeText({ text: "✓", tabId: state.tab.id });
     chrome.action.setBadgeBackgroundColor({
       color: "#16a34a",
       tabId: state.tab.id,
     });
-  }
+  } catch (_) {}
 }
 
 async function save() {

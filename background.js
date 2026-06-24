@@ -14,12 +14,16 @@ const ICON = "icons/icon128.png";
 // ---- UI feedback ------------------------------------------------------------
 
 function notify(title, message) {
-  chrome.notifications.create({
-    type: "basic",
-    iconUrl: chrome.runtime.getURL(ICON),
-    title,
-    message: message || "",
-  });
+  // Safari Web Extensions don't support chrome.notifications — guard it.
+  try {
+    if (!chrome.notifications || !chrome.notifications.create) return;
+    chrome.notifications.create({
+      type: "basic",
+      iconUrl: chrome.runtime.getURL(ICON),
+      title,
+      message: message || "",
+    });
+  } catch (_) {}
 }
 
 function setBadge(tabId, text, color) {
