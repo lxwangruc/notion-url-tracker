@@ -108,9 +108,10 @@ The popup always shows a single **Tags** picker, backed by whichever exists:
 
 ### Type ("Links By Type")
 
-If a `Type` select property exists (as in the template), the popup shows a
-**Type** dropdown (Video/Post/Article/…), defaulting to blank. Setting it files
-the link into the template's grouped "Links By Type" view.
+If a `Type` select property exists (as in the template), the popup shows an
+editable **Type** field (blank by default): pick an existing option
+(Video/Post/Article/…) or **type a new one** — Notion auto-creates the option.
+Setting it files the link into the template's grouped "Links By Type" view.
 
 The extension's own auto-created database uses these properties:
 

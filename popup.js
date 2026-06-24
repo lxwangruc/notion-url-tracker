@@ -202,22 +202,17 @@ function selectedTagData() {
 
 function setupTypeField(selected) {
   const s = state.schema;
-  const has = s && s.typeName && s.typeOptions.length;
+  const has = s && s.typeName; // show whenever the Type property exists
   document.getElementById("type-field").classList.toggle("hidden", !has);
   if (!has) return;
-  const sel = document.getElementById("type");
-  sel.innerHTML = "";
-  const blank = document.createElement("option");
-  blank.value = "";
-  blank.textContent = "—";
-  sel.appendChild(blank);
-  for (const t of s.typeOptions) {
+  const datalist = document.getElementById("type-suggestions");
+  datalist.innerHTML = "";
+  for (const t of s.typeOptions || []) {
     const opt = document.createElement("option");
     opt.value = t;
-    opt.textContent = t;
-    if (t === selected) opt.selected = true;
-    sel.appendChild(opt);
+    datalist.appendChild(opt);
   }
+  document.getElementById("type").value = selected || "";
 }
 
 // ---- Status -----------------------------------------------------------------
@@ -453,7 +448,7 @@ async function save() {
   const status = document.getElementById("status").value;
   const typeEl = document.getElementById("type");
   const type =
-    state.schema && state.schema.typeName ? typeEl.value || "" : undefined;
+    state.schema && state.schema.typeName ? typeEl.value.trim() : undefined;
   const note = document.getElementById("note").value;
   const { token, databaseId } = state.profile;
 

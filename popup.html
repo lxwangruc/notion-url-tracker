@@ -68,7 +68,14 @@
 
         <label id="type-field" class="field hidden">
           <span>Type</span>
-          <select id="type"></select>
+          <input
+            id="type"
+            type="text"
+            list="type-suggestions"
+            placeholder="Pick a type, or type a new one"
+            autocomplete="off"
+          />
+          <datalist id="type-suggestions"></datalist>
         </label>
 
         <div class="actions">
